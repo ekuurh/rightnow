@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>right now.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F3F5F8; --surface:#FFFFFF; --ink:#0F1729; --muted:#5F6B7E; --line:#DFE3EA; --chip:#E9EDF3;
+  --flash:#FFD400; --flash-ink:#1B1600; --late:#C8321F; --on:#0F7B4B;
+  --display:"Bricolage Grotesque", "Arial Narrow", system-ui, sans-serif;
+  --body:"Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0A1022; --surface:#131B30; --ink:#EEF1F6; --muted:#9AA5B8; --line:#243051; --chip:#1C2742;
+    --late:#FF7A66; --on:#4CD49A; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0A1022; --surface:#131B30; --ink:#EEF1F6; --muted:#9AA5B8; --line:#243051; --chip:#1C2742;
+  --late:#FF7A66; --on:#4CD49A; color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 var(--body);-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:3px solid var(--flash);outline-offset:2px}
+img{max-width:100%;display:block}
+.wrap{max-width:560px;margin:0 auto;padding:0 16px 48px}
+
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+.bar{max-width:560px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{font:800 28px/1 var(--display);letter-spacing:-.03em;margin:0}
+.daynav{display:flex;align-items:center;gap:4px}
+.daynav button{background:none;border:0;width:36px;height:36px;border-radius:50%;font-size:20px;line-height:1}
+.daynav button:disabled{opacity:.25;cursor:default}
+.daynav button:not(:disabled):hover{background:var(--chip)}
+#dayLabel{font-weight:600;min-width:7.5em;text-align:center}
+
+/* the moment banner */
+#banner{margin:16px 0 20px}
+.b-quiet{padding:16px 18px;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+.b-quiet h2{font:600 20px/1.2 var(--display);margin:0 0 4px;letter-spacing:-.01em}
+.b-quiet p{margin:0;color:var(--muted)}
+.b-live{background:var(--flash);color:var(--flash-ink);border-radius:22px;padding:18px 20px 20px;position:relative;overflow:hidden}
+.b-live h2{font:800 22px/1 var(--display);margin:0;letter-spacing:-.02em}
+.b-live .count{font:800 clamp(72px,24vw,128px)/.85 var(--display);letter-spacing:-.05em;margin:10px 0 14px;font-variant-numeric:tabular-nums}
+.b-live p{margin:0 0 14px;font-weight:500}
+.btn{border:0;border-radius:999px;padding:12px 20px;font-weight:600;background:var(--ink);color:var(--bg)}
+.btn.ghost{background:var(--chip);color:var(--ink)}
+.btn.flash{background:var(--flash);color:var(--flash-ink)}
+.btn:disabled{opacity:.5;cursor:default}
+.b-quiet .btn{margin-top:12px}
+@keyframes pop{0%{transform:scale(.96);filter:brightness(1.6)}100%{transform:none;filter:none}}
+.b-live.just{animation:pop .6s ease-out}
+
+/* feed */
+.empty{color:var(--muted);text-align:center;padding:40px 12px}
+.post{margin:0 0 28px}
+.p-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.av{width:36px;height:36px;border-radius:50%;object-fit:cover;background:var(--chip);flex:none}
+.p-who{flex:1;min-width:0}
+.p-name{font-weight:600;line-height:1.2}
+.p-meta{font-size:13px;color:var(--muted)}
+.p-meta .late{color:var(--late)}
+.p-meta .ontime{color:var(--on)}
+.del{background:none;border:0;color:var(--muted);font-size:13px;padding:6px 8px;border-radius:8px}
+.del.armed{color:var(--late);font-weight:600}
+.photo{position:relative;aspect-ratio:3/4;border-radius:20px;overflow:hidden;background:var(--chip)}
+.photo>img{width:100%;height:100%;object-fit:cover}
+.inset{position:absolute;top:12px;left:12px;width:30%;aspect-ratio:3/4;padding:0;border:3px solid #000;border-radius:14px;overflow:hidden;background:#000}
+.inset img{width:100%;height:100%;object-fit:cover}
+.photo.locked>img,.photo.locked .inset{filter:blur(26px) saturate(.8);transform:scale(1.08)}
+.lock{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:#fff;font-weight:600;text-shadow:0 1px 8px rgba(0,0,0,.5)}
+.caption{margin:10px 2px 0}
+.reacts{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.reacts button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 10px;font-size:15px;display:flex;gap:5px;align-items:center}
+.reacts button.mine{border-color:var(--ink);background:var(--chip)}
+.reacts .n{font-size:13px;font-weight:600}
+.ctoggle{background:none;border:0;color:var(--muted);padding:8px 2px 0;font-size:14px}
+.comments{margin-top:8px;border-left:2px solid var(--line);padding-left:12px}
+.cm{margin:0 0 8px;font-size:15px;overflow-wrap:anywhere}
+.cm b{font-weight:600;margin-right:6px}
+.cform{display:flex;gap:8px;margin-top:4px}
+.cform input{flex:1;min-width:0;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:10px 14px;font:inherit}
+.cform .btn{padding:10px 16px}
+
+/* camera */
+.cam{position:fixed;inset:0;z-index:50;background:#000;color:#fff;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.cam[hidden]{display:none}
+.cam-top{display:flex;justify-content:space-between;align-items:center;padding:10px 16px}
+.cam-top button{background:none;border:0;color:#fff;font-weight:600;padding:8px 0}
+#camTimer{font:800 20px/1 var(--display);font-variant-numeric:tabular-nums}
+#camTimer.live{color:var(--flash)}
+.cam-stage{flex:1;display:grid;place-items:center;min-height:0;padding:0 16px}
+.frame{position:relative;height:100%;max-height:calc(100vw * 4 / 3 - 32px);aspect-ratio:3/4;max-width:100%;border-radius:22px;overflow:hidden;background:#111}
+.frame video,.frame>img{width:100%;height:100%;object-fit:cover}
+.frame video.mirror{transform:scaleX(-1)}
+#camFlash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .35s}
+#camFlash.on{opacity:1;transition:none}
+#camHint{position:absolute;left:0;right:0;bottom:16px;text-align:center;font-weight:600;text-shadow:0 1px 6px rgba(0,0,0,.6)}
+.cam-bottom{padding:16px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.shutter{width:76px;height:76px;border-radius:50%;border:5px solid #fff;background:transparent;padding:0}
+.shutter::after{content:"";display:block;margin:5px;height:calc(100% - 10px);border-radius:50%;background:#fff;transition:transform .1s}
+.shutter:active::after{transform:scale(.88)}
+.shutter:disabled{opacity:.4}
+.row{display:flex;gap:10px;width:100%;max-width:420px}
+.row .btn{flex:1}
+.cam .btn{background:#fff;color:#000}
+.cam .btn.ghost{background:#2a2a2a;color:#fff}
+.cam input[type=text]{width:100%;max-width:420px;border:1px solid #333;background:#141414;color:#fff;border-radius:999px;padding:12px 16px;font:inherit}
+.fallback{padding:24px;text-align:center;max-width:360px}
+.fallback p{color:#bbb}
+.fallback label{display:block;margin:12px 0;padding:14px;border-radius:14px;background:#1d1d1d;font-weight:600;cursor:pointer}
+.fallback label.done{background:#123d27}
+.fallback input{display:none}
+.err{color:#ff8b7a;font-size:14px;text-align:center;min-height:1em;margin:0}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:999px;font-weight:600;z-index:60}
+@media (prefers-reduced-motion: reduce){.b-live.just{animation:none}#camFlash{transition:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1 class="brand">right now.</h1>
+    <nav class="daynav" aria-label="Choose day">
+      <button id="prevDay" aria-label="Previous day">‹</button>
+      <span id="dayLabel">Today</span>
+      <button id="nextDay" aria-label="Next day">›</button>
+    </nav>
+  </div>
+</header>
+<main class="wrap">
+  <section id="banner" aria-live="polite"></section>
+  <section id="feed"></section>
+</main>
+
+<div id="cam" class="cam" hidden role="dialog" aria-label="Camera">
+  <div class="cam-top"><button id="camClose">Close</button><span id="camTimer"></span><span style="width:40px"></span></div>
+  <div class="cam-stage" id="camStage"></div>
+  <div class="cam-bottom" id="camBottom"></div>
+</div>
+
+<script>
+(function(){
+const $ = s => document.querySelector(s);
+const pad = n => String(n).padStart(2,'0');
+const keyOf = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parseKey = k => { const [y,m,d] = k.split('-').map(Number); return new Date(y, m-1, d); };
+const shiftKey = (k, n) => { const d = parseKey(k); d.setDate(d.getDate()+n); return keyOf(d); };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const tfmt = ms => new Date(ms).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const WINDOW = 2*60*1000;
+const EMOJI = ['😂','😍','😮','🔥','👍'];
+
+function hash(s){ let h = 2166136261; for (const c of s){ h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+// Same random moment for everyone: somewhere between 10:00 and 22:00 local time.
+function defaultMoment(k){ return parseKey(k).getTime() + (600 + hash('rightnow:' + k) % 720) * 60000; }
+
+const S = {
+  db:null, user:null, assets:null, uid:null, canWrite:true, isEditor:false, ready:false,
+  today:keyOf(new Date()), view:keyOf(new Date()),
+  todayDoc:null, myTodayPost:null, myTodayLoaded:false,
+  posts:new Map(), comments:[], loadingView:true,
+  todayUnsubs:[], viewUnsubs:[],
+  profiles:{}, swapped:new Set(), openComments:new Set(), drafts:{}, lastBanner:null
+};
+const canPost = () => !!(S.db && S.assets && S.uid && S.canWrite);
+const momentToday = () => (S.todayDoc && typeof S.todayDoc.momentAt === 'number') ? S.todayDoc.momentAt : defaultMoment(S.today);
+
+function toast(msg){
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 2200);
+}
+function onDbErr(e){ if (e && e.code !== 'revoked') console.warn('db', e); }
+
+/* ---------- data ---------- */
+function subscribeToday(){
+  S.todayUnsubs.forEach(u => u()); S.todayUnsubs = [];
+  S.todayDoc = null; S.myTodayPost = null; S.myTodayLoaded = !S.uid;
+  S.todayUnsubs.push(S.db.doc(`days/${S.today}`).onSnapshot(s => { S.todayDoc = s.exists ? s.data() : null; render(); }, onDbErr));
+  if (S.uid) S.todayUnsubs.push(S.db.doc(`days/${S.today}/posts/${S.uid}`).onSnapshot(s => {
+    S.myTodayPost = s.exists ? s.data() : null; S.myTodayLoaded = true; render();
+  }, onDbErr));
+}
+function subscribeView(){
+  S.viewUnsubs.forEach(u => u()); S.viewUnsubs = [];
+  S.posts = new Map(); S.comments = []; S.loadingView = true;
+  const d = S.view;
+  S.viewUnsubs.push(S.db.collection(`days/${d}/posts`).onSnapshot(snap => {
+    S.posts = new Map(snap.docs.map(x => [x.id, x.data()])); S.loadingView = false; loadProfiles(); renderFeed();
+  }, onDbErr));
+  S.viewUnsubs.push(S.db.collection(`days/${d}/comments`).orderBy('at').limit(500).onSnapshot(snap => {
+    S.comments = snap.docs.map(x => ({id:x.id, ...x.data()})); loadProfiles(); renderFeed();
+  }, onDbErr));
+}
+async function loadProfiles(){
+  if (!S.user || !S.user.profiles) return;
+  const ids = new Set(S.posts.keys()); S.comments.forEach(c => c.uid && ids.add(c.uid));
+  const missing = [...ids].filter(i => !S.profiles[i]);
+  if (!missing.length) return;
+  try { const ps = await S.user.profiles(missing); Object.assign(S.profiles, ps); renderFeed(); } catch(e){}
+}
+const nameOf = id => id === S.uid ? 'You' : ((S.profiles[id] && S.profiles[id].name) || 'Someone');
+const avatarOf = id => (S.profiles[id] && S.profiles[id].avatarUrl) || '';
+
+/* ---------- rendering ---------- */
+function bannerState(){
+  if (!S.ready) return {kind:'loading'};
+  if (!S.db) return {kind:'offline'};
+  if (!S.myTodayLoaded) return {kind:'loading'};
+  if (S.myTodayPost) return {kind:'posted'};
+  const now = Date.now(), m = momentToday();
+  if (now < m) return {kind:'waiting', m};
+  if (now < m + WINDOW) return {kind:'live', left:m + WINDOW - now};
+  return {kind:'late', m};
+}
+function lateText(p){
+  const diff = (p.postedAt || 0) - (p.momentAt || 0);
+  if (diff <= WINDOW) return '<span class="ontime">on time</span>';
+  const mins = Math.round(diff / 60000);
+  return `<span class="late">${mins < 60 ? mins + ' min' : Math.floor(mins/60) + ' h'} late</span>`;
+}
+function renderBanner(){
+  const b = bannerState(), el = $('#banner');
+  const noPost = '<p style="margin-top:8px">You can look around, but posting needs Contributor access from whoever shared this page.</p>';
+  let html = '';
+  if (b.kind === 'loading') html = '<div class="b-quiet"><p>Loading…</p></div>';
+  else if (b.kind === 'offline') html = '<div class="b-quiet"><h2>Open this in Claude to join in</h2><p>Sign in and open the shared link to post and see your friends’ photos.</p></div>';
+  else if (b.kind === 'posted'){
+    const p = S.myTodayPost;
+    html = `<div class="b-quiet"><h2>You’re done for today</h2><p>Posted at ${tfmt(p.postedAt)}, ${lateText(p)}. Next moment drops tomorrow.</p></div>`;
+  } else if (b.kind === 'waiting'){
+    html = `<div class="b-quiet"><h2>Today’s moment hasn’t dropped yet</h2><p>It lands at a random time between 10 am and 10 pm, the same for everyone. When it does, you get two minutes to post.</p>${S.isEditor ? '<button class="btn ghost" data-action="drop">Drop it now</button>' : ''}</div>`;
+  } else if (b.kind === 'live'){
+    const s = Math.ceil(b.left / 1000);
+    html = `<div class="b-live${S.lastBanner === 'waiting' ? ' just' : ''}"><h2>Time to post</h2><div class="count">${Math.floor(s/60)}:${pad(s%60)}</div><p>Both cameras, one shot, no filters.</p>${canPost() ? '<button class="btn" data-action="camera">Open camera</button>' : noPost}</div>`;
+  } else if (b.kind === 'late'){
+    html = `<div class="b-quiet"><h2>The moment dropped at ${tfmt(b.m)}</h2><p>You can still post. It’ll show how late you were.</p>${canPost() ? '<button class="btn flash" data-action="camera">Post late</button>' : noPost}</div>`;
+  }
+  if (b.kind === 'live') document.title = '⚡ Time to post'; else document.title = 'right now.';
+  if (S.lastBanner === 'waiting' && b.kind === 'live' && navigator.vibrate) { try { navigator.vibrate([120,60,120]); } catch(e){} }
+  const cnt = el.querySelector('.b-live .count');
+  if (b.kind === 'live' && S.lastBanner === 'live' && cnt && !!el.querySelector('[data-action=camera]') === canPost()){
+    const s = Math.ceil(b.left / 1000); cnt.textContent = `${Math.floor(s/60)}:${pad(s%60)}`;
+  } else if (el.innerHTML !== html) el.innerHTML = html;
+  S.lastBanner = b.kind;
+}
+function renderNav(){
+  const label = S.view === S.today ? 'Today' : S.view === shiftKey(S.today, -1) ? 'Yesterday'
+    : parseKey(S.view).toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'});
+  $('#dayLabel').textContent = label;
+  $('#nextDay').disabled = S.view >= S.today;
+  $('#prevDay').disabled = S.view <= shiftKey(S.today, -30);
+}
+function postHTML(id, p, locked){
+  const swapped = S.swapped.has(id);
+  const main = swapped && p.front ? p.front : p.back, small = swapped ? p.back : p.front;
+  const av = avatarOf(id);
+  const reacts = p.reactions || {};
+  const counts = {}; Object.values(reacts).forEach(e => { if (e) counts[e] = (counts[e] || 0) + 1; });
+  const mine = reacts[S.uid];
+  const cms = S.comments.filter(c => c.postUid === id);
+  const open = S.openComments.has(id);
+  const meta = `${tfmt(p.postedAt)}, ${lateText(p)}${p.retakes ? `, ${p.retakes} retake${p.retakes > 1 ? 's' : ''}` : ''}`;
+  let h = `<article class="post"><div class="p-head">${av ? `<img class="av" src="${esc(av)}" alt="">` : '<span class="av"></span>'}
+    <div class="p-who"><div class="p-name">${esc(nameOf(id))}</div><div class="p-meta">${meta}</div></div>
+    ${id === S.uid ? `<button class="del" data-action="del" data-id="${esc(id)}">Delete</button>` : ''}</div>
+    <div class="photo${locked ? ' locked' : ''}"><img src="/_blob/${esc(main)}" alt="${esc(nameOf(id))}’s photo" loading="lazy">
+    ${small ? `<button class="inset" data-action="swap" data-id="${esc(id)}" aria-label="Swap photos"><img src="/_blob/${esc(small)}" alt=""></button>` : ''}
+    ${locked ? '<div class="lock">Post yours to see this</div>' : ''}</div>`;
+  if (locked) return h + '</article>';
+  if (p.caption) h += `<p class="caption">${esc(p.caption)}</p>`;
+  h += '<div class="reacts">' + EMOJI.map(e => `<button class="${mine === e ? 'mine' : ''}" data-action="react" data-id="${esc(id)}" data-e="${e}" aria-label="React ${e}">${e}${counts[e] ? `<span class="n">${counts[e]}</span>` : ''}</button>`).join('') + '</div>';
+  h += `<button class="ctoggle" data-action="toggleC" data-id="${esc(id)}">${cms.length ? `${cms.length} comment${cms.length > 1 ? 's' : ''}` : 'Add a comment'}</button>`;
+  if (open){
+    h += '<div class="comments">' + cms.map(c => `<p class="cm"><b>${esc(nameOf(c.uid))}</b>${esc(c.text)}</p>`).join('');
+    if (S.db && S.uid && S.canWrite) h += `<div class="cform"><input type="text" maxlength="300" placeholder="Say something" data-draft="c:${esc(id)}" data-id="${esc(id)}" aria-label="Comment"><button class="btn" data-action="send" data-id="${esc(id)}">Send</button></div>`;
+    h += '</div>';
+  }
+  return h + '</article>';
+}
+function renderFeed(){
+  const feed = $('#feed');
+  const active = document.activeElement, focusKey = active && active.dataset ? active.dataset.draft : null;
+  const caret = focusKey ? active.selectionStart : null;
+  let html = '';
+  if (!S.db) html = '';
+  else if (S.loadingView) html = '<p class="empty">Loading…</p>';
+  else {
+    const isToday = S.view === S.today;
+    const locked = isToday && canPost() && !S.myTodayPost;
+    const list = [...S.posts.entries()].sort((a, b) => (a[0] === S.uid ? -1 : b[0] === S.uid ? 1 : (b[1].postedAt || 0) - (a[1].postedAt || 0)));
+    if (!list.length) html = `<p class="empty">${isToday ? 'Nobody’s posted yet today.' : 'Nobody posted on this day.'}</p>`;
+    else html = list.map(([id, p]) => postHTML(id, p, locked && id !== S.uid)).join('');
+  }
+  feed.innerHTML = html;
+  feed.querySelectorAll('input[data-draft]').forEach(i => { i.value = S.drafts[i.dataset.draft] || ''; });
+  if (focusKey){
+    const el = feed.querySelector(`input[data-draft="${CSS.escape(focusKey)}"]`);
+    if (el){ el.focus(); try { el.setSelectionRange(caret, caret); } catch(e){} }
+  }
+  feed.querySelectorAll('.photo img').forEach(img => img.addEventListener('error', () => { img.style.visibility = 'hidden'; }, {once:true}));
+}
+function render(){ renderNav(); renderBanner(); renderFeed(); }
+
+/* ---------- actions ---------- */
+const armed = new Map();
+document.addEventListener('click', async ev => {
+  const t = ev.target.closest('[data-action]'); if (!t) return;
+  const a = t.dataset.action, id = t.dataset.id;
+  if (a === 'camera') openCam();
+  else if (a === 'drop'){
+    t.disabled = true;
+    try { await S.db.doc(`days/${S.today}`).set({momentAt: Date.now()}); } catch(e){ toast('Couldn’t drop the moment. Try again.'); t.disabled = false; }
+  }
+  else if (a === 'swap'){ S.swapped.has(id) ? S.swapped.delete(id) : S.swapped.add(id); renderFeed(); }
+  else if (a === 'toggleC'){ S.openComments.has(id) ? S.openComments.delete(id) : S.openComments.add(id); renderFeed();
+    if (S.openComments.has(id)) { const i = $(`#feed input[data-id="${CSS.escape(id)}"]`); if (i) i.focus(); } }
+  else if (a === 'react'){
+    if (!S.db || !S.uid || !S.canWrite) return;
+    const p = S.posts.get(id); const cur = p && p.reactions ? p.reactions[S.uid] : null;
+    try { await S.db.doc(`days/${S.view}/posts/${id}`).update({reactions:{[S.uid]: cur === t.dataset.e ? null : t.dataset.e}}); }
+    catch(e){ if (e.code === 'invalid_argument') { S.canWrite = false; render(); } else toast('Couldn’t save that. Try again.'); }
+  }
+  else if (a === 'send') sendComment(id);
+  else if (a === 'del'){
+    if (!armed.get(id)){ armed.set(id, true); t.textContent = 'Tap again to delete'; t.classList.add('armed');
+      setTimeout(() => { armed.delete(id); if (t.isConnected){ t.textContent = 'Delete'; t.classList.remove('armed'); } }, 3000); return; }
+    armed.delete(id);
+    const p = S.posts.get(id);
+    try {
+      await S.db.doc(`days/${S.view}/posts/${id}`).delete();
+      if (S.assets && p){ for (const x of [p.back, p.front]) if (x) S.assets.delete(x).catch(() => {}); }
+      toast('Deleted');
+    } catch(e){ toast('Couldn’t delete. Try again.'); }
+  }
+});
+document.addEventListener('input', ev => { const k = ev.target.dataset && ev.target.dataset.draft; if (k) S.drafts[k] = ev.target.value; });
+document.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.dataset && ev.target.dataset.draft){ ev.preventDefault(); sendComment(ev.target.dataset.id); } });
+async function sendComment(id){
+  const key = 'c:' + id, text = (S.drafts[key] || '').trim();
+  if (!text || !S.db || !S.uid) return;
+  S.drafts[key] = '';
+  try { await S.db.collection(`days/${S.view}/comments`).add({postUid:id, uid:S.uid, text:text.slice(0,300), at:Date.now()}); }
+  catch(e){ S.drafts[key] = text; renderFeed(); toast(e.code === 'quota_exceeded' ? 'Storage is full. Delete some old posts.' : 'Couldn’t send. Try again.'); }
+}
+$('#prevDay').onclick = () => { S.view = shiftKey(S.view, -1); S.openComments.clear(); if (S.db) subscribeView(); render(); };
+$('#nextDay').onclick = () => { if (S.view < S.today){ S.view = shiftKey(S.view, 1); S.openComments.clear(); if (S.db) subscribeView(); render(); } };
+
+/* ---------- camera ---------- */
+const cam = { stream:null, facing:'environment', back:null, front:null, retakes:0, mode:'idle', busy:false, urls:[], err:'' };
+function frameToCanvas(src, sw, sh, mirror){
+  const r = 3/4; let cw = sw, ch = sh;
+  if (sw / sh > r) cw = sh * r; else ch = sw / r;
+  const outW = Math.min(1080, Math.round(cw)), outH = Math.round(outW / r);
+  const c = document.createElement('canvas'); c.width = outW; c.height = outH;
+  const x = c.getContext('2d');
+  if (mirror){ x.translate(outW, 0); x.scale(-1, 1); }
+  x.drawImage(src, (sw - cw) / 2, (sh - ch) / 2, cw, ch, 0, 0, outW, outH);
+  return c;
+}
+const toBlob = c => new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error('encode')), 'image/jpeg', 0.82));
+async function fileToBlob(file){
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    return await toBlob(frameToCanvas(img, img.naturalWidth, img.naturalHeight, false));
+  } finally { URL.revokeObjectURL(url); }
+}
+function stopStream(){ if (cam.stream){ cam.stream.getTracks().forEach(t => t.stop()); cam.stream = null; } }
+async function startStream(facing){
+  stopStream();
+  cam.stream = await navigator.mediaDevices.getUserMedia({audio:false, video:{facingMode:{ideal:facing}, width:{ideal:1440}, height:{ideal:1920}}});
+  cam.facing = facing;
+  const v = $('#vid'); v.srcObject = cam.stream; v.classList.toggle('mirror', facing === 'user');
+  await v.play();
+  if (!v.videoWidth) await new Promise(r => v.addEventListener('loadedmetadata', r, {once:true}));
+}
+function clearShots(){ cam.urls.forEach(u => URL.revokeObjectURL(u)); cam.urls = []; cam.back = null; cam.front = null; }
+async function openCam(){
+  if (!canPost()) return;
+  clearShots(); cam.retakes = 0; cam.err = ''; cam.caption = '';
+  $('#cam').hidden = false; document.body.style.overflow = 'hidden';
+  await goLive();
+}
+async function goLive(){
+  cam.mode = 'live'; renderCam();
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('nocam');
+    await startStream('environment'); $('#shutter').disabled = false;
+  } catch(e){ stopStream(); cam.mode = 'fallback'; renderCam(); }
+}
+function closeCam(){ stopStream(); clearShots(); cam.mode = 'idle'; $('#cam').hidden = true; document.body.style.overflow = ''; }
+function flash(){ const f = $('#camFlash'); if (!f) return; f.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('on'))); }
+async function shoot(){
+  if (cam.busy) return; cam.busy = true; $('#shutter').disabled = true;
+  const v = $('#vid');
+  try {
+    flash();
+    cam.back = await toBlob(frameToCanvas(v, v.videoWidth, v.videoHeight, cam.facing === 'user'));
+    $('#camHint').textContent = 'Now you. Hold still…';
+    try {
+      await startStream('user'); await sleep(900); flash();
+      cam.front = await toBlob(frameToCanvas(v, v.videoWidth, v.videoHeight, true));
+    } catch(e){ cam.front = null; }
+  } catch(e){ cam.err = 'Couldn’t capture. Try again.'; }
+  stopStream(); cam.busy = false;
+  if (cam.back){ cam.mode = 'review'; } else { cam.mode = 'live'; }
+  renderCam();
+  if (cam.mode === 'live') goLive();
+}
+function renderCam(){
+  const st = $('#camStage'), bt = $('#camBottom');
+  if (cam.mode === 'live'){
+    st.innerHTML = '<div class="frame"><video id="vid" playsinline muted autoplay></video><div id="camFlash"></div><div id="camHint">Back camera first, then you</div></div>';
+    bt.innerHTML = `<p class="err">${esc(cam.err)}</p><button class="shutter" id="shutter" aria-label="Take photo" disabled></button>`;
+    $('#shutter').onclick = shoot;
+  } else if (cam.mode === 'fallback'){
+    st.innerHTML = `<div class="fallback"><h2 style="font:800 24px/1.1 var(--display);margin:0 0 8px">Camera’s blocked here</h2>
+      <p>Use your phone’s camera instead: one photo of what’s in front of you, then a selfie.</p>
+      <label id="lb1">${cam.back ? 'Main photo ready' : 'Take the main photo'}<input type="file" accept="image/*" capture="environment" id="f1"></label>
+      <label id="lb2">${cam.front ? 'Selfie ready' : 'Take a selfie'}<input type="file" accept="image/*" capture="user" id="f2"></label></div>`;
+    bt.innerHTML = `<p class="err">${esc(cam.err)}</p><div class="row"><button class="btn" id="fbNext" ${cam.back ? '' : 'disabled'}>Next</button></div>`;
+    if (cam.back) $('#lb1').classList.add('done'); if (cam.front) $('#lb2').classList.add('done');
+    $('#f1').onchange = async e => { const f = e.target.files[0]; if (f){ try { cam.back = await fileToBlob(f); cam.err = ''; } catch(x){ cam.err = 'That photo couldn’t be read. Try another.'; } renderCam(); } };
+    $('#f2').onchange = async e => { const f = e.target.files[0]; if (f){ try { cam.front = await fileToBlob(f); cam.err = ''; } catch(x){ cam.err = 'That photo couldn’t be read. Try another.'; } renderCam(); } };
+    $('#fbNext').onclick = () => { cam.mode = 'review'; cam.viaFiles = true; renderCam(); };
+  } else if (cam.mode === 'review' || cam.mode === 'uploading'){
+    clearUrlsOnly();
+    const bu = URL.createObjectURL(cam.back), fu = cam.front ? URL.createObjectURL(cam.front) : null;
+    cam.urls.push(bu); if (fu) cam.urls.push(fu);
+    const [m, s] = cam.swap && fu ? [fu, bu] : [bu, fu];
+    st.innerHTML = `<div class="frame"><img src="${m}" alt="Your photo">${s ? `<button class="inset" id="rvSwap" aria-label="Swap photos"><img src="${s}" alt=""></button>` : ''}</div>`;
+    const up = cam.mode === 'uploading';
+    bt.innerHTML = `<input type="text" id="cap" maxlength="120" placeholder="Add a caption" value="${esc(cam.caption || '')}" ${up ? 'disabled' : ''}>
+      <p class="err">${esc(cam.err)}</p>
+      <div class="row"><button class="btn ghost" id="retake" ${up ? 'disabled' : ''}>Retake</button><button class="btn" id="postIt" ${up ? 'disabled' : ''}>${up ? 'Posting…' : 'Post'}</button></div>`;
+    $('#cap').oninput = e => { cam.caption = e.target.value; };
+    if (s) $('#rvSwap').onclick = () => { cam.swap = !cam.swap; renderCam(); };
+    $('#retake').onclick = () => { cam.retakes++; clearShots(); cam.err = ''; cam.swap = false; cam.viaFiles ? (cam.mode = 'fallback', renderCam()) : goLive(); };
+    $('#postIt').onclick = submit;
+  }
+  updateCamTimer();
+}
+function clearUrlsOnly(){ cam.urls.forEach(u => URL.revokeObjectURL(u)); cam.urls = []; }
+async function submit(){
+  cam.mode = 'uploading'; cam.err = ''; renderCam();
+  try {
+    const b = await S.assets.upload(cam.back, {type:'image/jpeg'});
+    const f = cam.front ? await S.assets.upload(cam.front, {type:'image/jpeg'}) : null;
+    await S.db.doc(`days/${S.today}/posts/${S.uid}`).set({
+      uid:S.uid, back:b.id, front:f ? f.id : null, caption:(cam.caption || '').trim().slice(0,120),
+      postedAt:Date.now(), momentAt:momentToday(), retakes:cam.retakes, reactions:{}
+    });
+    closeCam();
+    if (S.view !== S.today){ S.view = S.today; subscribeView(); }
+    render(); toast('Posted');
+  } catch(e){
+    const c = e && e.code;
+    cam.err = c === 'quota_exceeded' ? 'Storage is full. Delete some old posts and try again.'
+      : (c === 'invalid_argument' || c === 'not_granted') ? 'You don’t have permission to post here.'
+      : 'Couldn’t post. Check your connection and try again.';
+    cam.mode = 'review'; renderCam();
+  }
+}
+function updateCamTimer(){
+  const el = $('#camTimer'); if (!el || $('#cam').hidden) return;
+  const left = momentToday() + WINDOW - Date.now();
+  if (left > 0 && Date.now() >= momentToday()){ const s = Math.ceil(left/1000); el.textContent = `${Math.floor(s/60)}:${pad(s%60)}`; el.className = 'live'; }
+  else { el.textContent = 'Late'; el.className = ''; }
+}
+$('#camClose').onclick = closeCam;
+
+/* ---------- clock ---------- */
+setInterval(() => {
+  const k = keyOf(new Date());
+  if (k !== S.today){
+    const wasToday = S.view === S.today; S.today = k;
+    if (wasToday) S.view = k;
+    if (S.db){ subscribeToday(); subscribeView(); }
+    render();
+  } else { renderBanner(); }
+  updateCamTimer();
+}, 1000);
+
+/* ---------- start ---------- */
+async function init(){
+  render();
+  if (!window.claude || typeof window.claude.use !== 'function'){ S.ready = true; render(); return; }
+  const [db, user, assets] = await Promise.all([claude.use('db'), claude.use('user'), claude.use('assets')]);
+  S.db = db; S.user = user; S.assets = assets;
+  if (user){
+    try { S.uid = await user.id(); } catch(e){}
+    try { const c = await user.can('data.write'); if (c === false) S.canWrite = false; } catch(e){}
+    try { S.isEditor = !!(await user.canEdit()); } catch(e){}
+  }
+  S.ready = true;
+  if (db){ subscribeToday(); subscribeView(); }
+  render();
+}
+init();
+})();
+</script>
+</body>
+</html>
