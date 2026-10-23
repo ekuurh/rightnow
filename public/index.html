@@ -93,6 +93,10 @@ header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var
 .cform{display:flex;gap:8px;margin-top:4px}
 .cform input{flex:1;min-width:0;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:10px 14px;font:inherit}
 .cform .btn{padding:10px 16px}
+.join input{display:block;width:100%;margin:12px 0 0;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:12px;padding:12px 14px;font:inherit}
+.join .err{color:var(--late);text-align:left;margin:10px 0 0}
+span.av{display:grid;place-items:center;font-weight:600;font-size:15px;color:var(--muted)}
+.signout{background:none;border:0;color:var(--muted);font-size:13px;padding:6px 0}
 
 /* camera */
 .cam{position:fixed;inset:0;z-index:50;background:#000;color:#fff;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -142,6 +146,7 @@ header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var
 <main class="wrap">
   <section id="banner" aria-live="polite"></section>
   <section id="feed"></section>
+  <p class="empty" id="who"></p>
 </main>
 
 <div id="cam" class="cam" hidden role="dialog" aria-label="Camera">
@@ -168,56 +173,62 @@ function hash(s){ let h = 2166136261; for (const c of s){ h ^= c.charCodeAt(0); 
 function defaultMoment(k){ return parseKey(k).getTime() + (600 + hash('rightnow:' + k) % 720) * 60000; }
 
 const S = {
-  db:null, user:null, assets:null, uid:null, canWrite:true, isEditor:false, ready:false,
+  uid:null, isEditor:false, ready:false, passwordRequired:false, adminEnabled:false, lastSig:'',
   today:keyOf(new Date()), view:keyOf(new Date()),
   todayDoc:null, myTodayPost:null, myTodayLoaded:false,
   posts:new Map(), comments:[], loadingView:true,
-  todayUnsubs:[], viewUnsubs:[],
   profiles:{}, swapped:new Set(), openComments:new Set(), drafts:{}, lastBanner:null
 };
-const canPost = () => !!(S.db && S.assets && S.uid && S.canWrite);
+const canPost = () => !!S.uid;
 const momentToday = () => (S.todayDoc && typeof S.todayDoc.momentAt === 'number') ? S.todayDoc.momentAt : defaultMoment(S.today);
 
 function toast(msg){
   const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
   document.body.appendChild(t); setTimeout(() => t.remove(), 2200);
 }
-function onDbErr(e){ if (e && e.code !== 'revoked') console.warn('db', e); }
 
 /* ---------- data ---------- */
-function subscribeToday(){
-  S.todayUnsubs.forEach(u => u()); S.todayUnsubs = [];
-  S.todayDoc = null; S.myTodayPost = null; S.myTodayLoaded = !S.uid;
-  S.todayUnsubs.push(S.db.doc(`days/${S.today}`).onSnapshot(s => { S.todayDoc = s.exists ? s.data() : null; render(); }, onDbErr));
-  if (S.uid) S.todayUnsubs.push(S.db.doc(`days/${S.today}/posts/${S.uid}`).onSnapshot(s => {
-    S.myTodayPost = s.exists ? s.data() : null; S.myTodayLoaded = true; render();
-  }, onDbErr));
+async function api(path, {method = 'GET', json, body, type} = {}){
+  const opts = {method, headers:{}, credentials:'same-origin'};
+  if (json !== undefined){ opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(json); }
+  else if (body){ opts.headers['Content-Type'] = type; opts.body = body; }
+  const r = await fetch(path, opts);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok){ const e = new Error(data.error || 'http_' + r.status); e.code = data.error; e.status = r.status; e.data = data; throw e; }
+  return data;
 }
-function subscribeView(){
-  S.viewUnsubs.forEach(u => u()); S.viewUnsubs = [];
-  S.posts = new Map(); S.comments = []; S.loadingView = true;
-  const d = S.view;
-  S.viewUnsubs.push(S.db.collection(`days/${d}/posts`).onSnapshot(snap => {
-    S.posts = new Map(snap.docs.map(x => [x.id, x.data()])); S.loadingView = false; loadProfiles(); renderFeed();
-  }, onDbErr));
-  S.viewUnsubs.push(S.db.collection(`days/${d}/comments`).orderBy('at').limit(500).onSnapshot(snap => {
-    S.comments = snap.docs.map(x => ({id:x.id, ...x.data()})); loadProfiles(); renderFeed();
-  }, onDbErr));
+// Polls today (for the banner) and the day being viewed (for the feed); only re-renders when something changed.
+let seq = 0;
+async function refresh(){
+  if (!S.uid) return;
+  const my = ++seq, today = S.today, view = S.view;
+  try {
+    const [t, v] = await Promise.all([api(`/api/day/${today}`), view === today ? null : api(`/api/day/${view}`)]);
+    if (my !== seq) return;
+    const sig = JSON.stringify([today, view, t, v]);
+    if (sig === S.lastSig) return;
+    S.lastSig = sig;
+    const vd = v || t;
+    S.todayDoc = t.day; S.myTodayPost = t.posts[S.uid] || null; S.myTodayLoaded = true;
+    S.posts = new Map(Object.entries(vd.posts)); S.comments = vd.comments; S.loadingView = false;
+    Object.assign(S.profiles, t.users, vd.users);
+    render();
+  } catch(e){ if (e.status === 401) signedOut(); }
 }
-async function loadProfiles(){
-  if (!S.user || !S.user.profiles) return;
-  const ids = new Set(S.posts.keys()); S.comments.forEach(c => c.uid && ids.add(c.uid));
-  const missing = [...ids].filter(i => !S.profiles[i]);
-  if (!missing.length) return;
-  try { const ps = await S.user.profiles(missing); Object.assign(S.profiles, ps); renderFeed(); } catch(e){}
+function changeView(k){ S.view = k; S.openComments.clear(); S.posts = new Map(); S.comments = []; S.loadingView = true; S.lastSig = ''; render(); refresh(); }
+function signedOut(passwordRequired, adminEnabled){
+  S.uid = null; S.isEditor = false; S.myTodayPost = null; S.lastSig = '';
+  if (passwordRequired !== undefined){ S.passwordRequired = passwordRequired; S.adminEnabled = adminEnabled; }
+  render();
 }
+function signedIn(u){ S.uid = u.id; S.isEditor = !!u.editor; S.profiles[u.id] = {name:u.name}; S.myTodayLoaded = false; S.loadingView = true; S.lastSig = ''; render(); refresh(); }
 const nameOf = id => id === S.uid ? 'You' : ((S.profiles[id] && S.profiles[id].name) || 'Someone');
-const avatarOf = id => (S.profiles[id] && S.profiles[id].avatarUrl) || '';
+const initialOf = id => ((S.profiles[id] && S.profiles[id].name) || '?').trim().charAt(0).toUpperCase();
 
 /* ---------- rendering ---------- */
 function bannerState(){
   if (!S.ready) return {kind:'loading'};
-  if (!S.db) return {kind:'offline'};
+  if (!S.uid) return {kind:'join'};
   if (!S.myTodayLoaded) return {kind:'loading'};
   if (S.myTodayPost) return {kind:'posted'};
   const now = Date.now(), m = momentToday();
@@ -233,10 +244,16 @@ function lateText(p){
 }
 function renderBanner(){
   const b = bannerState(), el = $('#banner');
-  const noPost = '<p style="margin-top:8px">You can look around, but posting needs Contributor access from whoever shared this page.</p>';
   let html = '';
   if (b.kind === 'loading') html = '<div class="b-quiet"><p>Loading…</p></div>';
-  else if (b.kind === 'offline') html = '<div class="b-quiet"><h2>Open this in Claude to join in</h2><p>Sign in and open the shared link to post and see your friends’ photos.</p></div>';
+  else if (b.kind === 'join'){
+    if (S.lastBanner === 'join') return;
+    const pw = S.passwordRequired ? 'Group password' : S.adminEnabled ? 'Admin password (optional)' : '';
+    html = `<form class="b-quiet join" id="joinForm"><h2>Join in</h2><p>Pick the name your friends will see.</p>
+      <input name="name" maxlength="30" placeholder="Your name" autocomplete="nickname" required aria-label="Your name">
+      ${pw ? `<input name="password" type="password" placeholder="${pw}" autocomplete="current-password" ${S.passwordRequired ? 'required' : ''} aria-label="${pw}">` : ''}
+      <p class="err" id="joinErr"></p><button class="btn">Join</button></form>`;
+  }
   else if (b.kind === 'posted'){
     const p = S.myTodayPost;
     html = `<div class="b-quiet"><h2>You’re done for today</h2><p>Posted at ${tfmt(p.postedAt)}, ${lateText(p)}. Next moment drops tomorrow.</p></div>`;
@@ -244,14 +261,14 @@ function renderBanner(){
     html = `<div class="b-quiet"><h2>Today’s moment hasn’t dropped yet</h2><p>It lands at a random time between 10 am and 10 pm, the same for everyone. When it does, you get two minutes to post.</p>${S.isEditor ? '<button class="btn ghost" data-action="drop">Drop it now</button>' : ''}</div>`;
   } else if (b.kind === 'live'){
     const s = Math.ceil(b.left / 1000);
-    html = `<div class="b-live${S.lastBanner === 'waiting' ? ' just' : ''}"><h2>Time to post</h2><div class="count">${Math.floor(s/60)}:${pad(s%60)}</div><p>Both cameras, one shot, no filters.</p>${canPost() ? '<button class="btn" data-action="camera">Open camera</button>' : noPost}</div>`;
+    html = `<div class="b-live${S.lastBanner === 'waiting' ? ' just' : ''}"><h2>Time to post</h2><div class="count">${Math.floor(s/60)}:${pad(s%60)}</div><p>Both cameras, one shot, no filters.</p><button class="btn" data-action="camera">Open camera</button></div>`;
   } else if (b.kind === 'late'){
-    html = `<div class="b-quiet"><h2>The moment dropped at ${tfmt(b.m)}</h2><p>You can still post. It’ll show how late you were.</p>${canPost() ? '<button class="btn flash" data-action="camera">Post late</button>' : noPost}</div>`;
+    html = `<div class="b-quiet"><h2>The moment dropped at ${tfmt(b.m)}</h2><p>You can still post. It’ll show how late you were.</p><button class="btn flash" data-action="camera">Post late</button></div>`;
   }
   if (b.kind === 'live') document.title = '⚡ Time to post'; else document.title = 'right now.';
   if (S.lastBanner === 'waiting' && b.kind === 'live' && navigator.vibrate) { try { navigator.vibrate([120,60,120]); } catch(e){} }
   const cnt = el.querySelector('.b-live .count');
-  if (b.kind === 'live' && S.lastBanner === 'live' && cnt && !!el.querySelector('[data-action=camera]') === canPost()){
+  if (b.kind === 'live' && S.lastBanner === 'live' && cnt){
     const s = Math.ceil(b.left / 1000); cnt.textContent = `${Math.floor(s/60)}:${pad(s%60)}`;
   } else if (el.innerHTML !== html) el.innerHTML = html;
   S.lastBanner = b.kind;
@@ -262,22 +279,23 @@ function renderNav(){
   $('#dayLabel').textContent = label;
   $('#nextDay').disabled = S.view >= S.today;
   $('#prevDay').disabled = S.view <= shiftKey(S.today, -30);
+  const who = S.uid ? `Signed in as ${esc((S.profiles[S.uid] || {}).name || '')} · <button class="signout" data-action="signout">Sign out</button>` : '';
+  if ($('#who').innerHTML !== who) $('#who').innerHTML = who;
 }
 function postHTML(id, p, locked){
   const swapped = S.swapped.has(id);
   const main = swapped && p.front ? p.front : p.back, small = swapped ? p.back : p.front;
-  const av = avatarOf(id);
   const reacts = p.reactions || {};
   const counts = {}; Object.values(reacts).forEach(e => { if (e) counts[e] = (counts[e] || 0) + 1; });
   const mine = reacts[S.uid];
   const cms = S.comments.filter(c => c.postUid === id);
   const open = S.openComments.has(id);
   const meta = `${tfmt(p.postedAt)}, ${lateText(p)}${p.retakes ? `, ${p.retakes} retake${p.retakes > 1 ? 's' : ''}` : ''}`;
-  let h = `<article class="post"><div class="p-head">${av ? `<img class="av" src="${esc(av)}" alt="">` : '<span class="av"></span>'}
+  let h = `<article class="post"><div class="p-head"><span class="av" aria-hidden="true">${esc(initialOf(id))}</span>
     <div class="p-who"><div class="p-name">${esc(nameOf(id))}</div><div class="p-meta">${meta}</div></div>
     ${id === S.uid ? `<button class="del" data-action="del" data-id="${esc(id)}">Delete</button>` : ''}</div>
-    <div class="photo${locked ? ' locked' : ''}"><img src="/_blob/${esc(main)}" alt="${esc(nameOf(id))}’s photo" loading="lazy">
-    ${small ? `<button class="inset" data-action="swap" data-id="${esc(id)}" aria-label="Swap photos"><img src="/_blob/${esc(small)}" alt=""></button>` : ''}
+    <div class="photo${locked ? ' locked' : ''}"><img src="/photos/${esc(main)}" alt="${esc(nameOf(id))}’s photo" loading="lazy">
+    ${small ? `<button class="inset" data-action="swap" data-id="${esc(id)}" aria-label="Swap photos"><img src="/photos/${esc(small)}" alt=""></button>` : ''}
     ${locked ? '<div class="lock">Post yours to see this</div>' : ''}</div>`;
   if (locked) return h + '</article>';
   if (p.caption) h += `<p class="caption">${esc(p.caption)}</p>`;
@@ -285,7 +303,7 @@ function postHTML(id, p, locked){
   h += `<button class="ctoggle" data-action="toggleC" data-id="${esc(id)}">${cms.length ? `${cms.length} comment${cms.length > 1 ? 's' : ''}` : 'Add a comment'}</button>`;
   if (open){
     h += '<div class="comments">' + cms.map(c => `<p class="cm"><b>${esc(nameOf(c.uid))}</b>${esc(c.text)}</p>`).join('');
-    if (S.db && S.uid && S.canWrite) h += `<div class="cform"><input type="text" maxlength="300" placeholder="Say something" data-draft="c:${esc(id)}" data-id="${esc(id)}" aria-label="Comment"><button class="btn" data-action="send" data-id="${esc(id)}">Send</button></div>`;
+    if (S.uid) h += `<div class="cform"><input type="text" maxlength="300" placeholder="Say something" data-draft="c:${esc(id)}" data-id="${esc(id)}" aria-label="Comment"><button class="btn" data-action="send" data-id="${esc(id)}">Send</button></div>`;
     h += '</div>';
   }
   return h + '</article>';
@@ -295,7 +313,7 @@ function renderFeed(){
   const active = document.activeElement, focusKey = active && active.dataset ? active.dataset.draft : null;
   const caret = focusKey ? active.selectionStart : null;
   let html = '';
-  if (!S.db) html = '';
+  if (!S.uid) html = '';
   else if (S.loadingView) html = '<p class="empty">Loading…</p>';
   else {
     const isToday = S.view === S.today;
@@ -322,41 +340,53 @@ document.addEventListener('click', async ev => {
   if (a === 'camera') openCam();
   else if (a === 'drop'){
     t.disabled = true;
-    try { await S.db.doc(`days/${S.today}`).set({momentAt: Date.now()}); } catch(e){ toast('Couldn’t drop the moment. Try again.'); t.disabled = false; }
+    try { await api(`/api/day/${S.today}/drop`, {method:'POST', json:{}}); refresh(); } catch(e){ toast('Couldn’t drop the moment. Try again.'); t.disabled = false; }
   }
   else if (a === 'swap'){ S.swapped.has(id) ? S.swapped.delete(id) : S.swapped.add(id); renderFeed(); }
   else if (a === 'toggleC'){ S.openComments.has(id) ? S.openComments.delete(id) : S.openComments.add(id); renderFeed();
     if (S.openComments.has(id)) { const i = $(`#feed input[data-id="${CSS.escape(id)}"]`); if (i) i.focus(); } }
   else if (a === 'react'){
-    if (!S.db || !S.uid || !S.canWrite) return;
+    if (!S.uid) return;
     const p = S.posts.get(id); const cur = p && p.reactions ? p.reactions[S.uid] : null;
-    try { await S.db.doc(`days/${S.view}/posts/${id}`).update({reactions:{[S.uid]: cur === t.dataset.e ? null : t.dataset.e}}); }
-    catch(e){ if (e.code === 'invalid_argument') { S.canWrite = false; render(); } else toast('Couldn’t save that. Try again.'); }
+    try { await api(`/api/day/${S.view}/react`, {method:'POST', json:{postUid:id, emoji: cur === t.dataset.e ? null : t.dataset.e}}); refresh(); }
+    catch(e){ toast('Couldn’t save that. Try again.'); }
   }
   else if (a === 'send') sendComment(id);
+  else if (a === 'signout'){ try { await api('/api/logout', {method:'POST', json:{}}); } catch(e){} init(); }
   else if (a === 'del'){
     if (!armed.get(id)){ armed.set(id, true); t.textContent = 'Tap again to delete'; t.classList.add('armed');
       setTimeout(() => { armed.delete(id); if (t.isConnected){ t.textContent = 'Delete'; t.classList.remove('armed'); } }, 3000); return; }
     armed.delete(id);
-    const p = S.posts.get(id);
     try {
-      await S.db.doc(`days/${S.view}/posts/${id}`).delete();
-      if (S.assets && p){ for (const x of [p.back, p.front]) if (x) S.assets.delete(x).catch(() => {}); }
-      toast('Deleted');
+      await api(`/api/day/${S.view}/post`, {method:'DELETE'});
+      refresh(); toast('Deleted');
     } catch(e){ toast('Couldn’t delete. Try again.'); }
+  }
+});
+document.addEventListener('submit', async ev => {
+  if (ev.target.id !== 'joinForm') return;
+  ev.preventDefault();
+  const f = ev.target, btn = f.querySelector('button'), err = f.querySelector('#joinErr');
+  btn.disabled = true; err.textContent = '';
+  try {
+    const r = await api('/api/join', {method:'POST', json:{name:f.name.value, password:f.password ? f.password.value : ''}});
+    signedIn(r.user);
+  } catch(e){
+    err.textContent = e.code === 'wrong_password' ? 'That password isn’t right.' : e.code === 'name_required' ? 'Enter a name.' : 'Couldn’t join. Try again.';
+    btn.disabled = false;
   }
 });
 document.addEventListener('input', ev => { const k = ev.target.dataset && ev.target.dataset.draft; if (k) S.drafts[k] = ev.target.value; });
 document.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.dataset && ev.target.dataset.draft){ ev.preventDefault(); sendComment(ev.target.dataset.id); } });
 async function sendComment(id){
   const key = 'c:' + id, text = (S.drafts[key] || '').trim();
-  if (!text || !S.db || !S.uid) return;
+  if (!text || !S.uid) return;
   S.drafts[key] = '';
-  try { await S.db.collection(`days/${S.view}/comments`).add({postUid:id, uid:S.uid, text:text.slice(0,300), at:Date.now()}); }
-  catch(e){ S.drafts[key] = text; renderFeed(); toast(e.code === 'quota_exceeded' ? 'Storage is full. Delete some old posts.' : 'Couldn’t send. Try again.'); }
+  try { await api(`/api/day/${S.view}/comment`, {method:'POST', json:{postUid:id, text:text.slice(0,300)}}); S.lastSig = ''; refresh(); }
+  catch(e){ S.drafts[key] = text; renderFeed(); toast(e.code === 'quota_exceeded' ? 'This day has hit the comment limit.' : 'Couldn’t send. Try again.'); }
 }
-$('#prevDay').onclick = () => { S.view = shiftKey(S.view, -1); S.openComments.clear(); if (S.db) subscribeView(); render(); };
-$('#nextDay').onclick = () => { if (S.view < S.today){ S.view = shiftKey(S.view, 1); S.openComments.clear(); if (S.db) subscribeView(); render(); } };
+$('#prevDay').onclick = () => changeView(shiftKey(S.view, -1));
+$('#nextDay').onclick = () => { if (S.view < S.today) changeView(shiftKey(S.view, 1)); };
 
 /* ---------- camera ---------- */
 const cam = { stream:null, facing:'environment', back:null, front:null, retakes:0, mode:'idle', busy:false, urls:[], err:'' };
@@ -457,19 +487,20 @@ function clearUrlsOnly(){ cam.urls.forEach(u => URL.revokeObjectURL(u)); cam.url
 async function submit(){
   cam.mode = 'uploading'; cam.err = ''; renderCam();
   try {
-    const b = await S.assets.upload(cam.back, {type:'image/jpeg'});
-    const f = cam.front ? await S.assets.upload(cam.front, {type:'image/jpeg'}) : null;
-    await S.db.doc(`days/${S.today}/posts/${S.uid}`).set({
-      uid:S.uid, back:b.id, front:f ? f.id : null, caption:(cam.caption || '').trim().slice(0,120),
-      postedAt:Date.now(), momentAt:momentToday(), retakes:cam.retakes, reactions:{}
-    });
+    const b = await api('/api/photos', {method:'POST', body:cam.back, type:'image/jpeg'});
+    const f = cam.front ? await api('/api/photos', {method:'POST', body:cam.front, type:'image/jpeg'}) : null;
+    await api(`/api/day/${S.today}/post`, {method:'POST', json:{
+      back:b.id, front:f ? f.id : null, caption:(cam.caption || '').trim().slice(0,120),
+      momentAt:momentToday(), retakes:cam.retakes
+    }});
     closeCam();
-    if (S.view !== S.today){ S.view = S.today; subscribeView(); }
-    render(); toast('Posted');
+    if (S.view !== S.today) changeView(S.today); else { S.lastSig = ''; refresh(); }
+    toast('Posted');
   } catch(e){
     const c = e && e.code;
-    cam.err = c === 'quota_exceeded' ? 'Storage is full. Delete some old posts and try again.'
-      : (c === 'invalid_argument' || c === 'not_granted') ? 'You don’t have permission to post here.'
+    cam.err = c === 'already_posted' ? 'You’ve already posted today.'
+      : c === 'too_large' ? 'That photo is too big. Try again.'
+      : c === 'signed_out' ? 'You’ve been signed out. Close and join again.'
       : 'Couldn’t post. Check your connection and try again.';
     cam.mode = 'review'; renderCam();
   }
@@ -486,28 +517,20 @@ $('#camClose').onclick = closeCam;
 setInterval(() => {
   const k = keyOf(new Date());
   if (k !== S.today){
-    const wasToday = S.view === S.today; S.today = k;
-    if (wasToday) S.view = k;
-    if (S.db){ subscribeToday(); subscribeView(); }
-    render();
+    const wasToday = S.view === S.today; S.today = k; S.myTodayLoaded = false;
+    if (wasToday) changeView(k); else { S.lastSig = ''; render(); refresh(); }
   } else { renderBanner(); }
   updateCamTimer();
 }, 1000);
+setInterval(() => { if (!document.hidden) refresh(); }, 4000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
 
 /* ---------- start ---------- */
 async function init(){
-  render();
-  if (!window.claude || typeof window.claude.use !== 'function'){ S.ready = true; render(); return; }
-  const [db, user, assets] = await Promise.all([claude.use('db'), claude.use('user'), claude.use('assets')]);
-  S.db = db; S.user = user; S.assets = assets;
-  if (user){
-    try { S.uid = await user.id(); } catch(e){}
-    try { const c = await user.can('data.write'); if (c === false) S.canWrite = false; } catch(e){}
-    try { S.isEditor = !!(await user.canEdit()); } catch(e){}
-  }
-  S.ready = true;
-  if (db){ subscribeToday(); subscribeView(); }
-  render();
+  S.ready = false; render();
+  try { signedIn((await api('/api/me')).user); }
+  catch(e){ S.ready = true; signedOut(!!(e.data && e.data.passwordRequired), !!(e.data && e.data.adminEnabled)); return; }
+  S.ready = true; render();
 }
 init();
 })();

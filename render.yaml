@@ -1,5 +1,19 @@
 services:
   - type: web
     name: rightnow
-    runtime: static
-    staticPublishPath: .
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: DATA_DIR
+        value: /var/data
+      - key: APP_PASSWORD
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+    disk:
+      name: rightnow-data
+      mountPath: /var/data
+      sizeGB: 1
